@@ -81,10 +81,10 @@
 			// check for autoplay attribute, to resolve Firefox/jQuery bug with autoplay video elements
 			// and disable the native autoplay
 			// http://bugs.jquery.com/ticket/9174
-			var autoplay = acorn.$self.attr('autoplay') ? true : false;
+			var autoplay = acorn.$self.prop('autoplay');
 
 			// disable native autoplay
-			acorn.$self.attr('autoplay', false);
+			acorn.$self.prop('autoplay', false);
 
 
 			/* Define all the texts used
@@ -193,7 +193,7 @@
 			acorn.$volume = $('.acorn-volume-slider', acorn.$container);
 			acorn.$volumeBtn = $('.acorn-volume-button', acorn.$container);
 			acorn.$fullscreenBtn = $('.acorn-fullscreen-button', acorn.$container);
-            acorn.$tooltip = $('.acorn-tooltip', acorn.$container);
+			acorn.$tooltip = $('.acorn-tooltip', acorn.$container);
 
 			/*
 			 * Append the markup for the Captions and Transcript
@@ -208,14 +208,8 @@
 			acorn.$caption = $('.acorn-caption', acorn.$container);
 			acorn.$captionBtn = $('.acorn-caption-button', acorn.$container);
 			acorn.$captionSelector = $('.acorn-caption-selector', acorn.$container);
-
-			/*
-			 * Use HTML5 "data-" attributes to set the original Width&Height for the <video>
-			 * These are used when returning from Fullscreen Mode
-			 */
-			acorn.$self.attr('data-width', acorn.$self.width());
-			acorn.$self.attr('data-height', acorn.$self.height());
-
+			
+			
 			/*
 			 * Time formatting function
 			 * Takes the number of seconds as a parameter and return a readable format "minutes:seconds"
@@ -233,13 +227,13 @@
 			 * Function for the Play button
 			 * It triggers the native Play or Pause events
 			 */
-			var playMedia = function() {
+			var playMedia = function(e) {
 				if(!acorn.$self.prop('paused')) {
 					acorn.$self.trigger('pause');
 				} else {
-					//acorn.$self.trigger('play');
-					acorn.$self[0].play();
+					acorn.$self.trigger('play');
 				}
+				return false;
 			};
 
 			/*
@@ -298,7 +292,7 @@
 			var ariaTimeFormat = function(sec) {
 				var m = Math.floor(sec/60)<10?"" + Math.floor(sec/60):Math.floor(sec/60);
 				var s = Math.floor(sec-(m*60))<10?"" + Math.floor(sec-(m*60)):Math.floor(sec-(m*60));
-				var formatedTime;
+				var formatedTime, min;
 
 				var mins = 'minutes';
 				var secs = 'seconds';
@@ -347,7 +341,7 @@
 					seekLocation = ui.value;
 				}
 
-				acorn.$self[0].currentTime = seekLocation;
+				acorn.$self.prop('currentTime', seekLocation);
 
 				// manually blur the Caption Button
 				blurCaptionBtn();
@@ -364,10 +358,13 @@
 					wasPlaying = false;
 				}
 				seeking = false;
-				var sliderUI = $(ui.handle);
-				sliderUI.attr('aria-valuenow', parseInt(ui.value, 10));
-				sliderUI.attr('aria-valuetext', ariaTimeFormat(ui.value));
-				sliderUI.attr('aria-label', 'Video seek control');
+				if(!options.nativeSliders){
+					var sliderUI = $(ui.handle);
+					sliderUI.attr('aria-valuenow', parseInt(ui.value, 10));
+					sliderUI.attr('aria-valuetext', ariaTimeFormat(ui.value));
+					sliderUI.attr('aria-label', 'Video seek control');
+				}
+				
 			};
 
 			/*
@@ -431,11 +428,12 @@
 			 */
 			var updateSeek = function() {
 				// Get the duration of the media
-				var duration = acorn.$self[0].duration;
+				var duration = acorn.$self.prop('duration');
 
 				// Check for the nativeSliders option
 				if(options.nativeSliders) {
 					acorn.$seek.attr('max', duration);
+					//use input instead of change event (see: https://github.com/aFarkas/webshim/issues/297)
 					acorn.$seek.bind('change', startSeek);
 
 					acorn.$seek.bind('mousedown', startSeek);
@@ -480,9 +478,9 @@
 			 */
 			var showBuffer = function(e) {
 				var max = parseInt(acorn.$self.prop('duration'), 10);
-				var tr = this.buffered;
+				var tr = acorn.$self.prop('buffered');
 				if(tr && tr.length) {
-					var buffer = parseInt(this.buffered.end(0)-this.buffered.start(0), 10);
+					var buffer = parseInt(tr.end(0) - tr.start(0), 10);
 					var bufferWidth = (buffer*100)/max;
 
 					acorn.$buffer.css('width', bufferWidth + '%');
@@ -523,7 +521,7 @@
 			 * Mute and Unmute volume
 			 * Also add classes and change label on the Volume Button
 			 */
-			var muteVolume = function() {
+			var muteVolume = function(e) {
 				if(acorn.$self.prop('muted') === true) {
 					acorn.$self.prop('muted', false);
 					if(options.nativeSliders) {
@@ -597,18 +595,7 @@
 				acorn.$volumeBtn.click(muteVolume);
 			};
 
-			/*
-			 * FULLSCREEN Behviour
-			 *
-			 * Resize the video while in Fullscreen Mode
-			 * Attached to window.resize
-			 */
-			var resizeFullscreenVideo = function() {
-				acorn.$self.attr({
-					'width': $(window).width(),
-					'height': $(window).height()
-				});
-			};
+			
 
 			/*
 			 * Enter and exit Fullscreen Mode
@@ -617,50 +604,40 @@
 			 * and add classes to the controls and wrapper
 			 */
 			var goFullscreen = function() {
+				var isPolyfill = acorn.$self.hasClass('nonnative-api-active');
 				if(fullscreenMode) {
 					// exit fullscreen
-					if(acorn.$self[0].cancelFullScreen) {
+					if(!isPolyfill && acorn.$self[0].cancelFullScreen) {
 						acorn.$self[0].cancelFullScreen();
-					} else if(acorn.$self[0].webkitCancelFullScreen) {
+					} else if(!isPolyfill && acorn.$self[0].webkitCancelFullScreen) {
 						acorn.$self[0].webkitCancelFullScreen();
-					} else if(acorn.$self[0].mozCancelFullScreen) {
+					} else if(!isPolyfill && acorn.$self[0].mozCancelFullScreen) {
 							acorn.$self[0].mozCancelFullScreen();
 					} else {
 						// if no fullscreen api support, use full-page mode
-						$('body').css('overflow', 'auto');
+						$('body').css('overflow', '');
 
-						var w = acorn.$self.attr('data-width');
-						var h = acorn.$self.attr('data-height');
-
-						acorn.$self.removeClass('fullscreen-video').attr({
-							'width': w,
-							'height': h
-						});
-
-						$(window).unbind('resize');
 
 						acorn.$controls.removeClass('fullscreen-controls');
+						acorn.$self.parent().removeClass('has-fullscreen-video');
 					}
 
 					fullscreenMode = false;
 
 				} else {
 					// enter fullscreen
-					if(acorn.$self[0].requestFullscreen) {
+					if(!isPolyfill && acorn.$self[0].requestFullscreen) {
 						acorn.$self[0].requestFullscreen();
-					} else if(acorn.$self[0].webkitRequestFullscreen) {
+					} else if(!isPolyfill && acorn.$self[0].webkitRequestFullscreen) {
 						acorn.$self[0].webkitRequestFullscreen();
-					} else if(acorn.$self[0].mozRequestFullScreen) {
+					} else if(!isPolyfill && acorn.$self[0].mozRequestFullScreen) {
 							acorn.$self[0].mozRequestFullScreen();
 					} else {
 						$('body').css('overflow', 'hidden');
 
-						acorn.$self.addClass('fullscreen-video').attr({
-							width: $(window).width(),
-							height: $(window).height()
-						});
-
-						$(window).resize(resizeFullscreenVideo);
+						acorn.$self.addClass('fullscreen-video');
+						
+						acorn.$self.parent().addClass('has-fullscreen-video');
 
 						acorn.$controls.addClass('fullscreen-controls');
 					}
@@ -668,23 +645,24 @@
 					fullscreenMode = true;
 
 				}
+				$(document).trigger('updateshadowdom');
 			};
 
 			/*
-             * Tooltip Controls
-             *
-             * Show/Hide tooltip for all buttons with title attribute
-             */
-            var showTooltip = function(e) {
-                if($(this).attr('title')){
-                    acorn.$tooltip.html($(this).attr('title')).addClass('show-tooltip');
-                }
-            }
-            var hideTooltip = function(e) {
-                if($(this).attr('title')){
-                    acorn.$tooltip.removeClass('show-tooltip');
-                }
-            }
+			* Tooltip Controls
+			*
+			* Show/Hide tooltip for all buttons with title attribute
+			*/
+			var showTooltip = function(e) {
+				if($(this).attr('title')){
+					acorn.$tooltip.html($(this).attr('title')).addClass('show-tooltip');
+				}
+			};
+			var hideTooltip = function(e) {
+				if($(this).attr('title')){
+					acorn.$tooltip.removeClass('show-tooltip');
+				}
+			};
 
 			/*
 			 * CAPTIONS Behaviour
@@ -692,6 +670,7 @@
 			 * Turning off the captions
 			 * When selecting "None" from the Caption Selector or when the caption fails to load
 			 */
+			var captions;
 			var captionBtnActiveClass = 'acorn-caption-active';
 			var captionBtnLoadingClass = 'acorn-caption-loading';
 			var transcriptBtnActiveClass = 'acorn-transcript-active';
@@ -716,7 +695,7 @@
 			 */
 			var updateCaption = function() {
 				// how soon is now?
-				var now = acorn.$self[0].currentTime,
+				var now = acorn.$self.prop('currentTime'),
 					text = '',
 					i,
 					captionsLength = captions.length;
@@ -917,8 +896,8 @@
 					var firstCaption = acorn.$track.first().attr('src');
 					if(options.captionsOn) {
 						loadCaption(firstCaption);
-						$('input[name=' + captionRadioName + ']', acorn.$container).removeAttr('checked');
-						$('input[name=' + captionRadioName + ']:eq(1)', acorn.$container).prop('checked', 'true');
+						$('input[name=' + captionRadioName + ']', acorn.$container).prop('checked', false);
+						$('input[name=' + captionRadioName + ']:eq(1)', acorn.$container).prop('checked', true);
 					};
 				} else if(acorn.$track.length) {
 					// if there's only one <track> element
@@ -949,7 +928,10 @@
 			var init = function() {
 				// attach playback handlers
 				acorn.$playBtn.bind( (is_touch_device) ? 'touchstart' : 'click', playMedia);
-				acorn.$self.bind( (is_touch_device) ? 'touchstart' : 'click' , playMedia);
+				
+				if(document.createElement('video').canPlayType){
+					acorn.$self.bind( (is_touch_device) ? 'touchstart' : 'click' , playMedia);
+				}
 
 				acorn.$self.bind('play', startPlayback);
 				acorn.$self.bind('pause', stopPlayback);
@@ -962,9 +944,9 @@
 				acorn.$fullscreenBtn.click(goFullscreen);
 
 				// bind Tooltip Events
-                if(options.tooltipsOn){
-                    acorn.$controls.find('button').mouseover(showTooltip).mouseout(hideTooltip);
-                }
+				if(options.tooltipsOn){
+					acorn.$controls.find('button').mouseover(showTooltip).mouseout(hideTooltip);
+				}
 
 				// initialize volume controls
 				initVolume();
@@ -978,7 +960,7 @@
 					 * before the duration is available
 					 */
 					var t = window.setInterval(function() {
-								if (acorn.$self[0].readyState > 0) {
+								if (acorn.$self.prop('readyState') > 0) {
 									loadedMetadata = true;
 									updateSeek();
 
@@ -992,11 +974,12 @@
 				// trigger update seek manualy for the first time, for iOS support
 				//updateSeek();
 
-				// if an autoplay attribute was set, play the video
-				if(autoplay) acorn.$self.trigger('play');
+				
 
 				// remove the native controls
-				acorn.$self.removeAttr('controls');
+				acorn.$self.prop('controls', false);
+				
+				
 
 				if(acorn.$self.is('audio')) {
 					/*
@@ -1006,6 +989,14 @@
 					 */
 					acorn.$container.addClass('audio-player');
 				}
+				
+				
+				if($.fn.updatePolyfill){
+					$wrapper.updatePolyfill();
+				}
+				
+				// if an autoplay attribute was set, play the video
+				if(autoplay) acorn.$self.trigger('play');
 
 			}();
 
