@@ -19,6 +19,7 @@
 .acorn-player, .acorn-controls {
 	position: relative;
 }
+
 .acorn-timer {
 	cursor: default;
 }
